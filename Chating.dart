@@ -11,7 +11,7 @@ class _ChatingState extends State<Chating> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(),
+      body: Column(inkwkhjdsbghcjkg),
     );
   }
 }
