@@ -10,6 +10,8 @@ class Chating extends StatefulWidget {
 class _ChatingState extends State<Chating> {
   @override
   Widget build(BuildContext context) {
-    return Scaffold();
+    return Scaffold(
+      body: Column(),
+    );
   }
 }
