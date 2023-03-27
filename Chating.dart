@@ -1,6 +1,7 @@
 import 'dart:io';
-
 import 'dart:developer';
+import 'dart:math';
+import 'package:chat/Screen/VideoPlayer.dart';
 import 'package:chat/Screen/videoCommon.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,6 +9,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get/instance_manager.dart';
+import 'package:grouped_list/grouped_list.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -16,14 +18,15 @@ import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 
 class Chating extends StatefulWidget {
-  final String userMap, id;
-  const Chating({super.key, required this.userMap, required this.id});
+  final String userMap, id, userId;
+  const Chating({super.key, required this.userMap, required this.id, required this.userId});
 
   @override
   State<Chating> createState() => _ChatingState();
 }
 
 class _ChatingState extends State<Chating> {
+  Map<String, dynamic> messageModal = {};
   void sendmessage() {
     Map<String, dynamic> data = {
       "sendBy": FirebaseAuth.instance.currentUser!.displayName,
@@ -31,15 +34,15 @@ class _ChatingState extends State<Chating> {
       "time": FieldValue.serverTimestamp(),
       "message": chat.text,
       "type": "tex",
-      "samay": DateFormat('hh:mm a').format(DateTime.now())
+      "samay": DateFormat('hh:mm a').format(DateTime.now()),
+      "date": DateFormat('yyyy-MM-dd').format(DateTime.now()),
+      // "timestamp": DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day, 11, 30).microsecondsSinceEpoch.toString()
     };
 
     FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").add(data);
     chat.clear();
   }
 
-  String? uuu;
-  QueryDocumentSnapshot<Object?>? userMap;
   File? pickedFile;
   File? pickedVideo;
   void selectImage() async {
@@ -53,22 +56,30 @@ class _ChatingState extends State<Chating> {
 
   void uploadImage() async {
     String filename = Uuid().v1();
-    var ref = FirebaseStorage.instance.ref("Image").child(filename + ".jpg");
-    var uploadtask = await ref.putFile(pickedFile!);
-    String url = await uploadtask.ref.getDownloadURL();
+    int status = 1;
 
-    Map<String, dynamic> data = {
+    FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").doc(filename).set({
       "sendBy": FirebaseAuth.instance.currentUser!.displayName,
       "recieveBy": widget.userMap,
       "time": FieldValue.serverTimestamp(),
-      "message": url,
+      "message": "",
       "type": "image",
       "samay": DateFormat('hh:mm a').format(DateTime.now()),
-    };
-    FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").add(data);
+      "date": DateFormat('yyyy-MM-dd').format(DateTime.now()),
+    });
+    var ref = FirebaseStorage.instance.ref("Image").child(filename + ".jpg");
+    var uploadtask = await ref.putFile(pickedFile!).catchError((Error) {
+      FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").doc(filename).delete();
+      status = 0;
+    });
+    if (status == 1) {
+      String url = await uploadtask.ref.getDownloadURL();
+      FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").doc(filename).update({
+        "message": url
+      });
+    }
   }
 
-  //late VideoPlayerController  videoPlayerController;
   void selectVideo() async {
     await ImagePicker().pickVideo(source: ImageSource.gallery).then((XFile) {
       pickedVideo = File(XFile!.path);
@@ -79,32 +90,113 @@ class _ChatingState extends State<Chating> {
 
   void uploadVideo() async {
     String filename = Uuid().v1();
-    var ref = FirebaseStorage.instance.ref("Video").child(filename + ".mp4");
-    var uploadtask = await ref.putFile(pickedVideo!);
-    String videoUrl = await uploadtask.ref.getDownloadURL();
-    print(videoUrl);
-
-    Map<String, dynamic> data = {
+    int status = 1;
+    FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").doc(filename).set({
       "sendBy": FirebaseAuth.instance.currentUser!.displayName,
       "recieveBy": widget.userMap,
       "time": FieldValue.serverTimestamp(),
-      "message": videoUrl,
+      "message": "",
+      "video": "",
       "type": "video",
       "samay": DateFormat('hh:mm a').format(DateTime.now()),
-    };
-    FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").add(data);
+      "date": DateFormat('yyyy-MM-dd').format(DateTime.now())
+    });
+
+    var ref = FirebaseStorage.instance.ref("Video").child(filename + ".mp4");
+    var uploadtask = await ref.putFile(pickedVideo!).catchError((Error) {
+      FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").doc(filename).delete();
+      status = 0;
+    });
+
+    if (status == 1) {
+      String videoUrl = await uploadtask.ref.getDownloadURL();
+      print(videoUrl);
+
+      // lets create a thumbnail ..
+
+      final thhumbnail = await VideoThumbnail.thumbnailFile(
+        video: videoUrl,
+        thumbnailPath: (await getTemporaryDirectory()).path,
+        imageFormat: ImageFormat.JPEG,
+        maxHeight: 275, // specify the height of the thumbnail, let the width auto-scaled to keep the source aspect ratio
+        quality: 100,
+      );
+      File pickThumb;
+      pickThumb = File(thhumbnail.toString());
+      var refrence = FirebaseStorage.instance.ref("Thumbnail Image").child(filename + ".jpg");
+      var upload = await refrence.putFile(pickThumb);
+      String ThumbUrl = await upload.ref.getDownloadURL();
+
+      FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").doc(filename).update({
+        "message": ThumbUrl,
+        "video": videoUrl,
+      });
+    }
   }
 
   TextEditingController chat = TextEditingController();
+// extra work
+  // static String groupMessageDateAndTime(String time) {
+  //   var dt = DateTime.fromMicrosecondsSinceEpoch(int.parse(time.toString()));
+  //   var originalDate = DateFormat('MM/dd/yyyy').format(dt);
+
+  //   final todayDate = DateTime.now();
+
+  //   final today = DateTime(todayDate.year, todayDate.month, todayDate.day);
+  //   final yesterday = DateTime(todayDate.year, todayDate.month, todayDate.day - 1);
+  //   String difference = '';
+  //   final aDate = DateTime(dt.year, dt.month, dt.day);
+
+  //   if (aDate == today) {
+  //     difference = "Today";
+  //   } else if (aDate == yesterday) {
+  //     difference = "Yesterday";
+  //   } else {
+  //     difference = DateFormat.yMMMd().format(dt).toString();
+  //   }
+  //   print(difference);
+  //   return difference;
+  // }
+
+  // static DateTime returnDateAndTimeFormat(String time) {
+  //   var dt = DateTime.fromMicrosecondsSinceEpoch(int.parse(time.toString()));
+  //   var originalDate = DateFormat('MM/dd/yyyy').format(dt);
+
+  //   return DateTime(dt.year, dt.month, dt.day);
+  // }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
         appBar: AppBar(
-          centerTitle: true,
-          title: Text(
-            widget.userMap,
-            style: const TextStyle(fontSize: 25, fontStyle: FontStyle.italic),
-          ),
+          centerTitle: false,
+          title: StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance.collection("user").doc(widget.userId).snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.data != null) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      InkWell(
+                        onTap: () {
+                          // print("1");
+                          // groupMessageDateAndTime(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day).microsecondsSinceEpoch.toString());
+                        },
+                        child: Text(
+                          snapshot.data?["name"],
+                          style: const TextStyle(fontSize: 20),
+                        ),
+                      ),
+                      Text(
+                        snapshot.data?["status"],
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  );
+                } else {
+                  return Container();
+                }
+              }),
           backgroundColor: Colors.blueGrey,
         ),
         body: Stack(
@@ -116,6 +208,41 @@ class _ChatingState extends State<Chating> {
                     return ListView.builder(
                       itemCount: snapshot.data!.docs.length,
                       itemBuilder: (BuildContext context, index) {
+                        // let create timestamp date
+
+                        //  if(index == 0  && messagesList.length ==  1){
+                        //   newDate =  groupMessageDateAndTime(messagesList[index].timeStamp.toString()).toString();
+                        // }else if(index == messagesList.length-1){
+                        //   newDate =  groupMessageDateAndTime(messagesList[index].timeStamp.toString()).toString();
+                        // }else {
+
+                        //   final DateTime date = returnDateAndTimeFormat(messagesList[index].timeStamp.toString());
+                        //   final DateTime prevDate = returnDateAndTimeFormat(messagesList[index+1].timeStamp.toString());
+                        //   isSameDate = date.isAtSameMomentAs(prevDate);
+
+                        //   print("$date $prevDate $isSameDate");
+                        //   newDate =  isSameDate ?  '' : groupMessageDateAndTime(messagesList[index-1].timeStamp.toString()).toString() ;
+                        // }
+
+                        //
+                        String? newDate = '';
+                        // bool isSameDate = false;
+
+                        // if (index == 0 && snapshot.data!.docs.length == 1) {
+                        //   newDate = groupMessageDateAndTime(snapshot.data!.docs[index]["timestamp"]).toString();
+                        // } else if (index == snapshot.data!.docs.length - 1) {
+                        //   print("index:$index");
+                        //   print(snapshot.data!.docs.length - 1);
+                        //   print("111");
+                        //   newDate = groupMessageDateAndTime(snapshot.data!.docs[index]["timestamp"]).toString();
+                        // } else {
+                        //   final DateTime date = returnDateAndTimeFormat(snapshot.data!.docs[index]["timestamp"].toString());
+                        //   final DateTime prevDate = returnDateAndTimeFormat(snapshot.data!.docs[index + 1]["timestamp"].toString());
+                        //   isSameDate = date.isAtSameMomentAs(prevDate);
+                        //   print("$date $prevDate $isSameDate");
+                        //   newDate = isSameDate ? '' : groupMessageDateAndTime(snapshot.data!.docs[index - 1]["timestamp"].toString());
+                        // }
+
                         return Column(
                           crossAxisAlignment: snapshot.data!.docs[index]["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                           children: [
@@ -123,7 +250,10 @@ class _ChatingState extends State<Chating> {
                                 ? Padding(
                                     padding: EdgeInsets.only(left: snapshot.data!.docs[index]["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? 80 : 8, top: 8, bottom: 8, right: snapshot.data!.docs[index]["recieveBy"] != FirebaseAuth.instance.currentUser!.displayName ? 8 : 80),
                                     child: Container(
-                                      decoration: BoxDecoration(color: Colors.blueGrey, borderRadius: BorderRadius.circular(10)),
+                                      decoration: BoxDecoration(
+                                        color: snapshot.data!.docs[index]["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? Colors.blueGrey : Colors.grey,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
                                       child: Stack(
                                         children: [
                                           Positioned(
@@ -134,7 +264,7 @@ class _ChatingState extends State<Chating> {
                                               style: const TextStyle(color: Colors.white, fontSize: 12),
                                             ),
                                           ),
-                                          Container(
+                                          SizedBox(
                                             child: Padding(
                                               padding: const EdgeInsets.only(top: 8, bottom: 8, right: 70, left: 8),
                                               child: Text(
@@ -159,23 +289,55 @@ class _ChatingState extends State<Chating> {
                                                   snapshot.data!.docs[index]["message"],
                                                   fit: BoxFit.cover,
                                                 )
-                                              : Center(
+                                              : const Center(
                                                   child: CircularProgressIndicator(),
                                                 ),
                                         ),
                                       )
-                                    : VideoComon(ex: snapshot.data!.docs[index]["message"])
-                            // Container(
-                            //     height: 250,
-                            //     width: 200,
-                            //     margin: EdgeInsets.all(8),
-                            //     decoration: BoxDecoration(
-                            //       border: Border.all(color: Colors.blueGrey, width: 5),
-                            //     ),
-                            //     child: ReusableVideoPlayer(
-                            //       url: snapshot.data!.docs[index]["message"],
-                            //     ),
-                            //   )
+                                    : Stack(
+                                        children: [
+                                          Container(
+                                            margin: const EdgeInsets.all(8),
+                                            height: 275,
+                                            width: 200,
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: Colors.blueGrey, width: 5),
+                                            ),
+                                            child: snapshot.data!.docs[index]["message"] != ""
+                                                ? Image.network(
+                                                    snapshot.data!.docs[index]["message"],
+                                                    fit: BoxFit.cover,
+                                                  )
+                                                : const Center(
+                                                    child: CircularProgressIndicator(),
+                                                  ),
+                                          ),
+                                          Positioned(
+                                            top: 120,
+                                            left: 80,
+                                            child: InkWell(
+                                              onTap: () {
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (contex) => vplayer(
+                                                      video: snapshot.data!.docs[index]["video"],
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              child: const CircleAvatar(
+                                                maxRadius: 25,
+                                                minRadius: 25,
+                                                backgroundColor: Colors.black45,
+                                                child: Icon(
+                                                  Icons.play_arrow,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        ],
+                                      )
                           ],
                         );
                       },
@@ -187,7 +349,7 @@ class _ChatingState extends State<Chating> {
             Positioned(
               bottom: 0,
               child: Container(
-                height: 70,
+                height: 65,
                 width: Get.width,
                 color: Colors.white,
               ),
@@ -254,6 +416,13 @@ class _ChatingState extends State<Chating> {
   }
 }
 
+class Message {
+  final String tex;
+  final DateTime date;
+
+  const Message({required this.tex, required this.date});
+}
+
 class ex extends StatefulWidget {
   const ex({super.key});
 
@@ -262,40 +431,24 @@ class ex extends StatefulWidget {
 }
 
 class _exState extends State<ex> {
-  String? name;
-  void thumb() async {
-    final fileName = await VideoThumbnail.thumbnailFile(
-      video: "https://firebasestorage.googleapis.com/v0/b/chat-6d802.appspot.com/o/Video%2F63072320-c967-11ed-9c2b-6fecb518814d.mp4?alt=media&token=5ddc3146-7920-4e80-822c-7ee835179576",
-      thumbnailPath: (await getTemporaryDirectory()).path,
-      imageFormat: ImageFormat.WEBP,
-      maxHeight: 64, // specify the height of the thumbnail, let the width auto-scaled to keep the source aspect ratio
-      quality: 75,
-    );
-
-    setState(() {
-      name = fileName;
-    });
-  }
-
+  List<Message> message = [
+    Message(tex: "hey", date: DateTime.now().subtract(Duration(minutes: 1))),
+    Message(tex: "hey", date: DateTime.now().subtract(Duration(minutes: 1))),
+    Message(tex: "kem che", date: DateTime.now().subtract(Duration(minutes: 1))),
+    Message(tex: "saru", date: DateTime.now().subtract(Duration(minutes: 1))),
+  ];
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          Container(
-            height: 200,
-            width: 200,
-            child: name != null ? Image.file(File(name!)) : const Center(child: CircularProgressIndicator()),
-          ),
-          const SizedBox(
-            height: 20,
-          ),
-          ElevatedButton(
-              onPressed: () {
-                thumb();
-              },
-              child: const Text("select"))
-        ],
+      body: GroupedListView<Message, DateTime>(
+        elements: message,
+        groupBy: (Element) => DateTime(Element.date.year, Element.date.month, Element.date.day),
+        groupHeaderBuilder: (Message element) {
+          return Text(DateFormat.yMMMd().format(element.date));
+        },
+        indexedItemBuilder: (context, element, index) {
+          return Text(element.tex);
+        },
       ),
     );
   }
