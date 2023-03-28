@@ -1,7 +1,6 @@
 import 'dart:io';
-import 'dart:developer';
-import 'dart:math';
 import 'package:chat/Screen/VideoPlayer.dart';
+import 'package:chat/Screen/imageView.dart';
 import 'package:chat/Screen/videoCommon.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -90,7 +89,8 @@ class _ChatingState extends State<Chating> {
 
   void uploadVideo() async {
     String filename = Uuid().v1();
-    int status = 1;
+    String file = Uuid().v1();
+    int stat = 1;
     FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").doc(filename).set({
       "sendBy": FirebaseAuth.instance.currentUser!.displayName,
       "recieveBy": widget.userMap,
@@ -99,18 +99,18 @@ class _ChatingState extends State<Chating> {
       "video": "",
       "type": "video",
       "samay": DateFormat('hh:mm a').format(DateTime.now()),
-      "date": DateFormat('yyyy-MM-dd').format(DateTime.now())
+      "date": DateFormat('yyyy-MM-dd').format(DateTime.now()),
     });
 
     var ref = FirebaseStorage.instance.ref("Video").child(filename + ".mp4");
     var uploadtask = await ref.putFile(pickedVideo!).catchError((Error) {
       FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").doc(filename).delete();
-      status = 0;
+      stat = 0;
     });
 
-    if (status == 1) {
+    if (stat == 1) {
       String videoUrl = await uploadtask.ref.getDownloadURL();
-      print(videoUrl);
+      print("video uuuuuuuuuurl${videoUrl}");
 
       // lets create a thumbnail ..
 
@@ -118,15 +118,15 @@ class _ChatingState extends State<Chating> {
         video: videoUrl,
         thumbnailPath: (await getTemporaryDirectory()).path,
         imageFormat: ImageFormat.JPEG,
-        maxHeight: 275, // specify the height of the thumbnail, let the width auto-scaled to keep the source aspect ratio
+        maxHeight: 275,
         quality: 100,
       );
       File pickThumb;
       pickThumb = File(thhumbnail.toString());
-      var refrence = FirebaseStorage.instance.ref("Thumbnail Image").child(filename + ".jpg");
+      var refrence = FirebaseStorage.instance.ref("Thumbnail Image").child(file + ".jpg");
       var upload = await refrence.putFile(pickThumb);
       String ThumbUrl = await upload.ref.getDownloadURL();
-
+      print("thumb uuuuurll${ThumbUrl}");
       FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").doc(filename).update({
         "message": ThumbUrl,
         "video": videoUrl,
@@ -135,35 +135,6 @@ class _ChatingState extends State<Chating> {
   }
 
   TextEditingController chat = TextEditingController();
-// extra work
-  // static String groupMessageDateAndTime(String time) {
-  //   var dt = DateTime.fromMicrosecondsSinceEpoch(int.parse(time.toString()));
-  //   var originalDate = DateFormat('MM/dd/yyyy').format(dt);
-
-  //   final todayDate = DateTime.now();
-
-  //   final today = DateTime(todayDate.year, todayDate.month, todayDate.day);
-  //   final yesterday = DateTime(todayDate.year, todayDate.month, todayDate.day - 1);
-  //   String difference = '';
-  //   final aDate = DateTime(dt.year, dt.month, dt.day);
-
-  //   if (aDate == today) {
-  //     difference = "Today";
-  //   } else if (aDate == yesterday) {
-  //     difference = "Yesterday";
-  //   } else {
-  //     difference = DateFormat.yMMMd().format(dt).toString();
-  //   }
-  //   print(difference);
-  //   return difference;
-  // }
-
-  // static DateTime returnDateAndTimeFormat(String time) {
-  //   var dt = DateTime.fromMicrosecondsSinceEpoch(int.parse(time.toString()));
-  //   var originalDate = DateFormat('MM/dd/yyyy').format(dt);
-
-  //   return DateTime(dt.year, dt.month, dt.day);
-  // }
 
   @override
   Widget build(BuildContext context) {
@@ -177,15 +148,9 @@ class _ChatingState extends State<Chating> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      InkWell(
-                        onTap: () {
-                          // print("1");
-                          // groupMessageDateAndTime(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day).microsecondsSinceEpoch.toString());
-                        },
-                        child: Text(
-                          snapshot.data?["name"],
-                          style: const TextStyle(fontSize: 20),
-                        ),
+                      Text(
+                        snapshot.data?["name"],
+                        style: const TextStyle(fontSize: 20),
                       ),
                       Text(
                         snapshot.data?["status"],
@@ -205,53 +170,48 @@ class _ChatingState extends State<Chating> {
                 stream: FirebaseFirestore.instance.collection("chatroom").doc(widget.id).collection("chat").orderBy("time").snapshots(),
                 builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
                   if (snapshot.hasData) {
-                    return ListView.builder(
-                      itemCount: snapshot.data!.docs.length,
-                      itemBuilder: (BuildContext context, index) {
-                        // let create timestamp date
+                    List<QueryDocumentSnapshot<Object?>> document = snapshot.data!.docs;
 
-                        //  if(index == 0  && messagesList.length ==  1){
-                        //   newDate =  groupMessageDateAndTime(messagesList[index].timeStamp.toString()).toString();
-                        // }else if(index == messagesList.length-1){
-                        //   newDate =  groupMessageDateAndTime(messagesList[index].timeStamp.toString()).toString();
-                        // }else {
+                    return GroupedListView(
+                      elements: document,
+                      groupBy: (document) => document["date"],
+                      groupSeparatorBuilder: (value) {
+                        // yester day
 
-                        //   final DateTime date = returnDateAndTimeFormat(messagesList[index].timeStamp.toString());
-                        //   final DateTime prevDate = returnDateAndTimeFormat(messagesList[index+1].timeStamp.toString());
-                        //   isSameDate = date.isAtSameMomentAs(prevDate);
-
-                        //   print("$date $prevDate $isSameDate");
-                        //   newDate =  isSameDate ?  '' : groupMessageDateAndTime(messagesList[index-1].timeStamp.toString()).toString() ;
-                        // }
-
-                        //
-                        String? newDate = '';
-                        // bool isSameDate = false;
-
-                        // if (index == 0 && snapshot.data!.docs.length == 1) {
-                        //   newDate = groupMessageDateAndTime(snapshot.data!.docs[index]["timestamp"]).toString();
-                        // } else if (index == snapshot.data!.docs.length - 1) {
-                        //   print("index:$index");
-                        //   print(snapshot.data!.docs.length - 1);
-                        //   print("111");
-                        //   newDate = groupMessageDateAndTime(snapshot.data!.docs[index]["timestamp"]).toString();
-                        // } else {
-                        //   final DateTime date = returnDateAndTimeFormat(snapshot.data!.docs[index]["timestamp"].toString());
-                        //   final DateTime prevDate = returnDateAndTimeFormat(snapshot.data!.docs[index + 1]["timestamp"].toString());
-                        //   isSameDate = date.isAtSameMomentAs(prevDate);
-                        //   print("$date $prevDate $isSameDate");
-                        //   newDate = isSameDate ? '' : groupMessageDateAndTime(snapshot.data!.docs[index - 1]["timestamp"].toString());
-                        // }
-
+                        return Center(
+                          child: Container(
+                            margin: const EdgeInsets.all(8),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: Text(
+                              value ==
+                                      DateFormat('yyyy-MM-dd').format(
+                                        DateTime.now(),
+                                      )
+                                  ? "Today"
+                                  : value,
+                            ),
+                          ),
+                        );
+                      },
+                      itemBuilder: (context, element) {
                         return Column(
-                          crossAxisAlignment: snapshot.data!.docs[index]["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                          crossAxisAlignment: element["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                           children: [
-                            snapshot.data!.docs[index]["type"] == "tex"
+                            element["type"] == "tex"
                                 ? Padding(
-                                    padding: EdgeInsets.only(left: snapshot.data!.docs[index]["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? 80 : 8, top: 8, bottom: 8, right: snapshot.data!.docs[index]["recieveBy"] != FirebaseAuth.instance.currentUser!.displayName ? 8 : 80),
+                                    padding: EdgeInsets.only(
+                                      left: element["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? 80 : 8,
+                                      top: 8,
+                                      bottom: 8,
+                                      right: element["recieveBy"] != FirebaseAuth.instance.currentUser!.displayName ? 8 : 80,
+                                    ),
                                     child: Container(
                                       decoration: BoxDecoration(
-                                        color: snapshot.data!.docs[index]["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? Colors.blueGrey : Colors.grey,
+                                        color: element["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? Colors.blueGrey : Colors.grey,
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Stack(
@@ -260,7 +220,7 @@ class _ChatingState extends State<Chating> {
                                             bottom: 5,
                                             right: 4,
                                             child: Text(
-                                              snapshot.data!.docs[index]["samay"],
+                                              element["samay"],
                                               style: const TextStyle(color: Colors.white, fontSize: 12),
                                             ),
                                           ),
@@ -268,7 +228,7 @@ class _ChatingState extends State<Chating> {
                                             child: Padding(
                                               padding: const EdgeInsets.only(top: 8, bottom: 8, right: 70, left: 8),
                                               child: Text(
-                                                snapshot.data!.docs[index]["message"],
+                                                element["message"],
                                                 style: const TextStyle(color: Colors.white),
                                               ),
                                             ),
@@ -277,21 +237,32 @@ class _ChatingState extends State<Chating> {
                                       ),
                                     ),
                                   )
-                                : snapshot.data!.docs[index]["type"] == "image"
+                                : element["type"] == "image"
                                     ? Padding(
                                         padding: const EdgeInsets.all(8.0),
-                                        child: Container(
-                                          height: 275,
-                                          width: 225,
-                                          decoration: BoxDecoration(border: Border.all(color: Colors.blueGrey, width: 5)),
-                                          child: snapshot.data!.docs[index]["message"] != ""
-                                              ? Image.network(
-                                                  snapshot.data!.docs[index]["message"],
-                                                  fit: BoxFit.cover,
-                                                )
-                                              : const Center(
-                                                  child: CircularProgressIndicator(),
+                                        child: InkWell(
+                                          onTap: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (context) => ImageView(
+                                                  Image: element["message"],
                                                 ),
+                                              ),
+                                            );
+                                          },
+                                          child: Container(
+                                            height: 275,
+                                            width: 225,
+                                            decoration: BoxDecoration(border: Border.all(color: Colors.blueGrey, width: 5)),
+                                            child: element["message"] != ""
+                                                ? Image.network(
+                                                    element["message"],
+                                                    fit: BoxFit.cover,
+                                                  )
+                                                : const Center(
+                                                    child: CircularProgressIndicator(),
+                                                  ),
+                                          ),
                                         ),
                                       )
                                     : Stack(
@@ -303,9 +274,9 @@ class _ChatingState extends State<Chating> {
                                             decoration: BoxDecoration(
                                               border: Border.all(color: Colors.blueGrey, width: 5),
                                             ),
-                                            child: snapshot.data!.docs[index]["message"] != ""
+                                            child: element["message"] != ""
                                                 ? Image.network(
-                                                    snapshot.data!.docs[index]["message"],
+                                                    element["message"],
                                                     fit: BoxFit.cover,
                                                   )
                                                 : const Center(
@@ -320,7 +291,7 @@ class _ChatingState extends State<Chating> {
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
                                                     builder: (contex) => vplayer(
-                                                      video: snapshot.data!.docs[index]["video"],
+                                                      video: element["video"],
                                                     ),
                                                   ),
                                                 );
@@ -416,40 +387,273 @@ class _ChatingState extends State<Chating> {
   }
 }
 
-class Message {
-  final String tex;
-  final DateTime date;
 
-  const Message({required this.tex, required this.date});
-}
 
-class ex extends StatefulWidget {
-  const ex({super.key});
+// class Message {
+//   final String tex;
+//   final DateTime date;
 
-  @override
-  State<ex> createState() => _exState();
-}
+//   const Message({required this.tex, required this.date});
+// }
 
-class _exState extends State<ex> {
-  List<Message> message = [
-    Message(tex: "hey", date: DateTime.now().subtract(Duration(minutes: 1))),
-    Message(tex: "hey", date: DateTime.now().subtract(Duration(minutes: 1))),
-    Message(tex: "kem che", date: DateTime.now().subtract(Duration(minutes: 1))),
-    Message(tex: "saru", date: DateTime.now().subtract(Duration(minutes: 1))),
-  ];
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: GroupedListView<Message, DateTime>(
-        elements: message,
-        groupBy: (Element) => DateTime(Element.date.year, Element.date.month, Element.date.day),
-        groupHeaderBuilder: (Message element) {
-          return Text(DateFormat.yMMMd().format(element.date));
-        },
-        indexedItemBuilder: (context, element, index) {
-          return Text(element.tex);
-        },
-      ),
-    );
-  }
-}
+// class ex extends StatefulWidget {
+//   const ex({super.key});
+
+//   @override
+//   State<ex> createState() => _exState();
+// }
+
+// class _exState extends State<ex> {
+//   List<Message> message = [
+//     Message(tex: "hey", date: DateTime.now().subtract(Duration(minutes: 1))),
+//     Message(tex: "hey", date: DateTime.now().subtract(Duration(minutes: 1))),
+//     Message(tex: "kem che", date: DateTime.now().subtract(Duration(minutes: 1))),
+//     Message(tex: "saru", date: DateTime.now().subtract(Duration(minutes: 1))),
+//   ];
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       body: GroupedListView<Message, DateTime>(
+//         elements: message,
+//         groupBy: (Element) => DateTime(Element.date.year, Element.date.month, Element.date.day),
+//         groupHeaderBuilder: (Message element) {
+//           return Text(DateFormat.yMMMd().format(element.date));
+//         },
+//         indexedItemBuilder: (context, element, index) {
+//           return Text(element.tex);
+//         },
+//       ),
+//     );
+//   }
+// }
+
+
+// Old code
+
+
+// ListView.builder(
+                    //   itemCount: snapshot.data!.docs.length,
+                    //   itemBuilder: (BuildContext context, index) {
+                    //     return Column(
+                    //       crossAxisAlignment: snapshot.data!.docs[index]["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                    //       children: [
+                    //         snapshot.data!.docs[index]["type"] == "tex"
+                    //             ? Padding(
+                    //                 padding: EdgeInsets.only(left: snapshot.data!.docs[index]["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? 80 : 8, top: 8, bottom: 8, right: snapshot.data!.docs[index]["recieveBy"] != FirebaseAuth.instance.currentUser!.displayName ? 8 : 80),
+                    //                 child: Container(
+                    //                   decoration: BoxDecoration(
+                    //                     color: snapshot.data!.docs[index]["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? Colors.blueGrey : Colors.grey,
+                    //                     borderRadius: BorderRadius.circular(10),
+                    //                   ),
+                    //                   child: Stack(
+                    //                     children: [
+                    //                       Positioned(
+                    //                         bottom: 5,
+                    //                         right: 4,
+                    //                         child: Text(
+                    //                           snapshot.data!.docs[index]["samay"],
+                    //                           style: const TextStyle(color: Colors.white, fontSize: 12),
+                    //                         ),
+                    //                       ),
+                    //                       SizedBox(
+                    //                         child: Padding(
+                    //                           padding: const EdgeInsets.only(top: 8, bottom: 8, right: 70, left: 8),
+                    //                           child: Text(
+                    //                             snapshot.data!.docs[index]["message"],
+                    //                             style: const TextStyle(color: Colors.white),
+                    //                           ),
+                    //                         ),
+                    //                       ),
+                    //                     ],
+                    //                   ),
+                    //                 ),
+                    //               )
+                    //             : snapshot.data!.docs[index]["type"] == "image"
+                    //                 ? Padding(
+                    //                     padding: const EdgeInsets.all(8.0),
+                    //                     child: InkWell(
+                    //                       onTap: () {
+                    //                         Navigator.of(context).push(
+                    //                           MaterialPageRoute(
+                    //                             builder: (context) => ImageView(
+                    //                               Image: snapshot.data!.docs[index]["message"],
+                    //                             ),
+                    //                           ),
+                    //                         );
+                    //                       },
+                    //                       child: Container(
+                    //                         height: 275,
+                    //                         width: 225,
+                    //                         decoration: BoxDecoration(border: Border.all(color: Colors.blueGrey, width: 5)),
+                    //                         child: snapshot.data!.docs[index]["message"] != ""
+                    //                             ? Image.network(
+                    //                                 snapshot.data!.docs[index]["message"],
+                    //                                 fit: BoxFit.cover,
+                    //                               )
+                    //                             : const Center(
+                    //                                 child: CircularProgressIndicator(),
+                    //                               ),
+                    //                       ),
+                    //                     ),
+                    //                   )
+                    //                 : Stack(
+                    //                     children: [
+                    //                       Container(
+                    //                         margin: const EdgeInsets.all(8),
+                    //                         height: 275,
+                    //                         width: 200,
+                    //                         decoration: BoxDecoration(
+                    //                           border: Border.all(color: Colors.blueGrey, width: 5),
+                    //                         ),
+                    //                         child: snapshot.data!.docs[index]["message"] != ""
+                    //                             ? Image.network(
+                    //                                 snapshot.data!.docs[index]["message"],
+                    //                                 fit: BoxFit.cover,
+                    //                               )
+                    //                             : const Center(
+                    //                                 child: CircularProgressIndicator(),
+                    //                               ),
+                    //                       ),
+                    //                       Positioned(
+                    //                         top: 120,
+                    //                         left: 80,
+                    //                         child: InkWell(
+                    //                           onTap: () {
+                    //                             Navigator.of(context).push(
+                    //                               MaterialPageRoute(
+                    //                                 builder: (contex) => vplayer(
+                    //                                   video: snapshot.data!.docs[index]["video"],
+                    //                                 ),
+                    //                               ),
+                    //                             );
+                    //                           },
+                    //                           child: const CircleAvatar(
+                    //                             maxRadius: 25,
+                    //                             minRadius: 25,
+                    //                             backgroundColor: Colors.black45,
+                    //                             child: Icon(
+                    //                               Icons.play_arrow,
+                    //                               color: Colors.white,
+                    //                             ),
+                    //                           ),
+                    //                         ),
+                    //                       )
+                    //                     ],
+                    //                   )
+                    //       ],
+                    //     );
+                    //   },
+                    // );
+// column thi che .. 
+                    // Column(
+                    //       crossAxisAlignment: element["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? CrossAxisAlignment.end : 
+                    // CrossAxisAlignment.start,
+                    //       children: [
+                    //         element["type"] == "tex"
+                    //             ? Padding(
+                    //                 padding: EdgeInsets.only(left: element["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? 80 : 8, 
+                    // top: 8, bottom: 8, right: element["recieveBy"] != FirebaseAuth.instance.currentUser!.displayName ? 8 : 80),
+                    //                 child: Container(
+                    //                   decoration: BoxDecoration(
+                    //                     color: element["sendBy"] == FirebaseAuth.instance.currentUser!.displayName ? Colors.blueGrey : Colors.grey,
+                    //                     borderRadius: BorderRadius.circular(10),
+                    //                   ),
+                    //                   child: Stack(
+                    //                     children: [
+                    //                       Positioned(
+                    //                         bottom: 5,
+                    //                         right: 4,
+                    //                         child: Text(
+                    //                           element["samay"],
+                    //                           style: const TextStyle(color: Colors.white, fontSize: 12),
+                    //                         ),
+                    //                       ),
+                    //                       SizedBox(
+                    //                         child: Padding(
+                    //                           padding: const EdgeInsets.only(top: 8, bottom: 8, right: 70, left: 8),
+                    //                           child: Text(
+                    //                            element["message"],
+                    //                             style: const TextStyle(color: Colors.white),
+                    //                           ),
+                    //                         ),
+                    //                       ),
+                    //                     ],
+                    //                   ),
+                    //                 ),
+                    //               )
+                    //             : element["type"] == "image"
+                    //                 ? Padding(
+                    //                     padding: const EdgeInsets.all(8.0),
+                    //                     child: InkWell(
+                    //                       onTap: () {
+                    //                         Navigator.of(context).push(
+                    //                           MaterialPageRoute(
+                    //                             builder: (context) => ImageView(
+                    //                               Image: element["message"],
+                    //                             ),
+                    //                           ),
+                    //                         );
+                    //                       },
+                    //                       child: Container(
+                    //                         height: 275,
+                    //                         width: 225,
+                    //                         decoration: BoxDecoration(border: Border.all(color: Colors.blueGrey, width: 5)),
+                    //                         child: element["message"] != ""
+                    //                             ? Image.network(
+                    //                                element["message"],
+                    //                                 fit: BoxFit.cover,
+                    //                               )
+                    //                             : const Center(
+                    //                                 child: CircularProgressIndicator(),
+                    //                               ),
+                    //                       ),
+                    //                     ),
+                    //                   )
+                    //                 : Stack(
+                    //                     children: [
+                    //                       Container(
+                    //                         margin: const EdgeInsets.all(8),
+                    //                         height: 275,
+                    //                         width: 200,
+                    //                         decoration: BoxDecoration(
+                    //                           border: Border.all(color: Colors.blueGrey, width: 5),
+                    //                         ),
+                    //                         child: element["message"] != ""
+                    //                             ? Image.network(
+                    //                                element["message"],
+                    //                                 fit: BoxFit.cover,
+                    //                               )
+                    //                             : const Center(
+                    //                                 child: CircularProgressIndicator(),
+                    //                               ),
+                    //                       ),
+                    //                       Positioned(
+                    //                         top: 120,
+                    //                         left: 80,
+                    //                         child: InkWell(
+                    //                           onTap: () {
+                    //                             Navigator.of(context).push(
+                    //                               MaterialPageRoute(
+                    //                                 builder: (contex) => vplayer(
+                    //                                   video: selement["video"],
+                    //                                 ),
+                    //                               ),
+                    //                             );
+                    //                           },
+                    //                           child: const CircleAvatar(
+                    //                             maxRadius: 25,
+                    //                             minRadius: 25,
+                    //                             backgroundColor: Colors.black45,
+                    //                             child: Icon(
+                    //                               Icons.play_arrow,
+                    //                               color: Colors.white,
+                    //                             ),
+                    //                           ),
+                    //                         ),
+                    //                       )
+                    //                     ],
+                    //                   )
+                    //       ],
+                    //     );
+                    //   },
+                    // );
