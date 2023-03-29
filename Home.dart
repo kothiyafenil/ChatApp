@@ -1,9 +1,13 @@
 import 'dart:developer';
+import 'dart:ffi';
 
 import 'package:chat/Screen/Chating.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:contacts_service/contacts_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -12,7 +16,7 @@ class Home extends StatefulWidget {
   State<Home> createState() => _HomeState();
 }
 
-class _HomeState extends State<Home> {
+class _HomeState extends State<Home> with WidgetsBindingObserver {
   TextEditingController search = TextEditingController();
   // QueryDocumentSnapshot<Object?>? userMap;
   // List<QueryDocumentSnapshot<Object?>?> data = [];
@@ -44,8 +48,45 @@ class _HomeState extends State<Home> {
   void initState() {
     // TODO: implement initState
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    setstatus("Online");
+    getPermission();
   }
 
+  void setstatus(String status) {
+    FirebaseFirestore.instance.collection("user").doc(FirebaseAuth.instance.currentUser!.uid).update({
+      "status": status,
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      setstatus("Online");
+      // online
+    } else {
+      setstatus("Offline");
+      //offline
+    }
+  }
+
+  void getPermission() async {
+    if (await Permission.contacts.isGranted) {
+      fetchdata();
+// catch data..
+    } else {
+      await Permission.contacts.request();
+    }
+  }
+
+  List<Contact> contacts = [];
+
+  void fetchdata() async {
+    contacts = await ContactsService.getContacts();
+    // print(contacts[0].phones![0].value.toString());
+  }
+
+  // contact na phone number and apa data set karava ena phone number same hova jovi
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -53,15 +94,9 @@ class _HomeState extends State<Home> {
           appBar: AppBar(
             backgroundColor: Colors.blueGrey,
             centerTitle: true,
-            title: InkWell(
-              onTap: () {
-                // String id = ChatRoomId("Agstya First", "Fenil Kothiya");
-                // print(id);
-              },
-              child: Text(
-                FirebaseAuth.instance.currentUser!.displayName.toString(),
-                style: const TextStyle(color: Colors.white, fontSize: 25, fontStyle: FontStyle.italic),
-              ),
+            title: Text(
+              FirebaseAuth.instance.currentUser!.displayName.toString(),
+              style: const TextStyle(color: Colors.white, fontSize: 25, fontStyle: FontStyle.italic),
             ),
           ),
           body: StreamBuilder<QuerySnapshot>(
@@ -76,6 +111,7 @@ class _HomeState extends State<Home> {
                         return ListTile(
                           onTap: () {
                             String id = ChatRoomId(FirebaseAuth.instance.currentUser!.displayName.toString(), snapshot.data!.docs[index]["name"]);
+                            String userId = snapshot.data!.docs[index]["userId"];
                             log(id);
                             String name = snapshot.data!.docs[index]["name"];
                             Navigator.of(context).push(
@@ -83,6 +119,7 @@ class _HomeState extends State<Home> {
                                 builder: (_) => Chating(
                                   userMap: name.toString(),
                                   id: id,
+                                  userId: userId,
                                 ),
                               ),
                             );
